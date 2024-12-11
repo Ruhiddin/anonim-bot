@@ -1,167 +1,70 @@
-# from aiogram import Bot, Dispatcher
-# from aiogram.types import Message, CallbackQuery, InputMediaPhoto, InputMediaVideo
-# from aiogram.filters import CommandStart, Command
-# from aiogram.utils.keyboard import InlineKeyboardBuilder
-# import logging
-# import random
-# import string
-
-# # Logging setup
-# logging.basicConfig(level=logging.INFO)
-
-# # Bot initialization
-# BOT_TOKEN = "8024236657:AAG2mTsP1KRtNltfF5RZZESslvW_Nix9NFI"  # Replace with your bot's token
-# bot = Bot(token=BOT_TOKEN)
-# dp = Dispatcher()
-
-# # In-memory store
-# pending_messages = {}  # Format: {sender_id: recipient_id}
-# blocklist = {}  # Format: {recipient_id: set(sender_ids)}
-# previous_messages = {}  # Format: {recipient_id: (message_id, inline_buttons)}
-# user_links = {}  # Format: {user_id: unique_code}
-# link_to_user = {}  # Format: {unique_code: user_id}
-
-
-# # Generate a unique code for links
-# def generate_unique_code(length=8):
-#     return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
-
-
-# # Handle /start command
-# @dp.message(CommandStart())
-# async def start_handler(message: Message, command: CommandStart):
-#     if command.args:
-#         unique_code = command.args
-#         recipient_id = link_to_user.get(unique_code)
-
-#         if recipient_id:
-#             # Check if the recipient has blocked the sender
-#             if recipient_id in blocklist and message.chat.id in blocklist[recipient_id]:
-#                 await message.answer("You cannot send a message to this user.")
-#                 return
-
-#             keyboard = InlineKeyboardBuilder()
-#             keyboard.button(text="Cancel", callback_data="cancel")
-#             await message.answer(
-#                 "Send your anonymous message, photo, or video below. "
-#                 "Click 'Cancel' if you change your mind.",
-#                 reply_markup=markup,
-#             )
-#             pending_messages[message.chat.id] = recipient_id
-#         else:
-#             await message.answer("Invalid link. Please check the link and try again.")
-#     else:
-#         user_id = str(message.chat.id)
-#         bot_username = (await bot.get_me()).username
-
-#         # Generate or retrieve the user's unique link
-#         if user_id not in user_links:
-#             unique_code = generate_unique_code()
-#             user_links[user_id] = unique_code
-#             link_to_user[unique_code] = user_id
-#         else:
-#             unique_code = user_links[user_id]
-
-#         start_link = f"https://t.me/{bot_username}?start={unique_code}"
-#         await message.answer(
-#             f"Welcome to the Anonymous Messaging Bot!\n\n"
-#             f"Share this link with others to receive anonymous messages:\n{start_link}"
-#         )
-
-
-
-# # Handle sending text and media messages
-# @dp.message(lambda message: message.chat.id in pending_messages)
-# async def handle_anonymous_message(message: Message):
-#     recipient_id = pending_messages.pop(message.chat.id, None)
-#     if recipient_id:
-#         try:
-#             keyboard = InlineKeyboardBuilder()
-#             keyboard.button(text="Answer", callback_data=f"answer:{message.chat.id}")
-#             keyboard.button(text="Block", callback_data=f"block:{message.chat.id}")
-
-#             sent_message = None
-#             if message.photo:
-#                 sent_message = await bot.send_photo(
-#                     chat_id=int(recipient_id),
-#                     photo=message.photo[-1].file_id,
-#                     caption=message.caption,
-#                     reply_markup=markup,
-#                 )
-#             elif message.video:
-#                 sent_message = await bot.send_video(
-#                     chat_id=int(recipient_id),
-#                     video=message.video.file_id,
-#                     caption=message.caption,
-#                     reply_markup=markup,
-#                 )
-#             elif message.document:
-#                 sent_message = await bot.send_document(
-#                     chat_id=int(recipient_id),
-#                     document=message.document.file_id,
-#                     caption=message.caption,
-#                     reply_markup=markup,
-#                 )
-#             else:
-#                 sent_message = await bot.send_message(
-#                     chat_id=int(recipient_id),
-#                     text=f"Anonim xabar:\n\n{message.text}",
-#                     reply_markup=markup,
-#                 )
-
-#             if sent_message:
-#                 # Store the previous message's ID and inline buttons
-#                 previous_messages[int(recipient_id)] = (sent_message.message_id, markup)
-
-#             await message.answer("Your anonymous message has been sent!")
-#         except Exception as e:
-#             logging.error(f"Error sending message: {e}")
-#             await message.answer("Failed to deliver the message. The recipient may not be reachable.")
-#     else:
-#         await message.answer("An error occurred. Please try again.")
-
-# # Run the bot
-# if __name__ == "__main__":
-#     import asyncio
-
-#     asyncio.run(dp.start_polling(bot))
-
 from pprint import pprint
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message, CallbackQuery, InputMediaPhoto, InputMediaVideo
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from middlewares.error_loggin_middleware import ErrorLoggingMiddleware
 from middlewares.rate_limit_middleware import RateLimitMiddleware
 import logging
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
 from aiogram.enums import ParseMode
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+import string, random
 
 env_path = Path('.env')
 load_dotenv(dotenv_path=env_path)
-# Load environment variables
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN='7267176194:AAHhOme3QyXxr-Xuk5cSBydSNUI5VLCiUoM'
 
-# Logging setup
 logging.basicConfig(level=logging.INFO)
 
-# Bot initialization
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# In-memory store for pending message states and blocklist
-pending_messages = {}  # Format: {sender_id: recipient_id}
 blocklist = {}  # Format: {recipient_id: set(sender_ids)}
+user_map = {} # Format: {token: user_id}
+callback_map = {} # Format: {token: user_id}
+
+def generate_unique_id(length=8):
+    """
+    Generate a unique ID consisting of numbers and case-sensitive English letters.
+    
+    Args:
+        length (int): The length of the unique ID. Default is 8.
+    
+    Returns:
+        str: A randomly generated unique ID.
+    """
+    characters = string.ascii_letters + string.digits  # All case-sensitive letters and digits
+    unique_id = ''.join(random.choices(characters, k=length))
+    return unique_id
+
+def get_or_create_token(id, the_map):
+    for var, val in the_map.items():
+        if val == id:
+            return var
+    while True:
+        token = generate_unique_id()
+        if token not in the_map:
+            the_map[token] = id
+            return token
 
 
-# Handle /start command
+
+class User(StatesGroup):
+    msg = State()
+
 @dp.message(CommandStart())
 async def start_handler(message: Message, command: CommandStart, state: FSMContext):
     if command.args:
-        recipient_id = command.args
+        recipient_token = command.args
+        recipient_id = user_map.get(recipient_token, None)
+        if recipient_id is None:
+            return await message.answer("Bu link ortiq ishlamaydi. Foydalanuvchi uni yangilagan.")
+        
         try:
             int(recipient_id)
 
@@ -178,8 +81,8 @@ async def start_handler(message: Message, command: CommandStart, state: FSMConte
                 "Fikringizdan qaytsangiz, 'Bekor qilish' tugmasini bosing.",
                 reply_markup=markup,
             )
-            await state.update_data(prev_msg=prev_msg.message_id)
-            pending_messages[message.chat.id] = recipient_id
+            await state.update_data(prev_msg=prev_msg.message_id, recipient_id=recipient_id)
+            await state.set_state(User.msg)
         except ValueError:
             await message.answer("Xato link. Iltimos linki tekshirib, qaytadan urinib ko'ring\n\nEslatma: foydalanuvchi o'z linkini yangilagan bo'lsa, eski linklar bekor qilinadi.")
     else:
@@ -203,16 +106,18 @@ async def start_handler(message: Message, command: CommandStart, state: FSMConte
             "\n\n❌ *Bloklash imkoniyati* — Agar kimdir bezovta qilsa, uni bloklab, xabarlar olinishini to'xtatishingiz mumkin\\."
             "\n🛑 *Bekor qilish tugmasi* — Anonim xabar yuborish jarayonini istalgan vaqtda bekor qilishingiz mumkin\\."
             "\n🔄 *Xabar yuborish tugmachasi* — Xabaringizni saqlanmasdan bir zumda uzatamiz\\."
+            "\n🚫 *Yangilik va Reklamalar bilan bezovta qilinmaysiz\\❗️*"
             "\n\n\n🤝 *O'zingizni anonim his eting\\!* Biz sizga xavfsiz va ishonchli anonim muloqot muhitini taqdim etamiz\\. Har qanday taklif va savollaringiz bo'lsa, bemalol\\! 😊"
             "\n\n🔗 *Shaxsiy havolangizni oling va do'stlaringiz bilan ulashing\\!*"
             ),
             parse_mode=ParseMode.MARKDOWN_V2
         )
-        await welcome_msg.reply(f"https://t.me/{bot_username}?start={user_id}")
+        token = get_or_create_token(user_id, user_map)
+        await welcome_msg.reply(f"https://t.me/{bot_username}?start={token}")
 
 
 # Handle sending text and media messages
-@dp.message(lambda message: message.chat.id in pending_messages)
+@dp.message(StateFilter(User.msg))
 async def handle_anonymous_message(message: Message, state: FSMContext):
     s_data = await state.get_data()
     prev_msg_id = s_data.get('prev_msg')
@@ -222,12 +127,13 @@ async def handle_anonymous_message(message: Message, state: FSMContext):
     if prev_msg_id:
         await bot.delete_message(message.chat.id, prev_msg_id)
         await state.update_data(prev_msg=None)
-    recipient_id = pending_messages.pop(message.chat.id, None)
+    recipient_id = s_data.get('recipient_id')
     if recipient_id:
         try:
+            my_token = get_or_create_token(message.chat.id, callback_map)
             markup = InlineKeyboardBuilder()
-            markup.button(text="Javob yozish", callback_data=f"answer:{message.chat.id}")
-            markup.button(text="Bloklash", callback_data=f"block:{message.chat.id}")
+            markup.button(text="Javob yozish", callback_data=f"answer:{my_token}")
+            markup.button(text="Bloklash", callback_data=f"block:{my_token}")
             markup = markup.as_markup()
             # Handle different types of media
             if message.text:
@@ -317,20 +223,19 @@ async def handle_anonymous_message(message: Message, state: FSMContext):
             else:
                 await state.clear()
                 return await message.reply("Bu turdagi xabarlarni yuborish qo'llab quvvatlanmaydi. Iltimos, boshqa xabar yuboring.")
-            await state.clear()
             await message.answer("Sizning bu xabaringiz ↗️\n👆 Ushbu xabar muallifiga yuborildi", reply_to_message_id=reply_to)
+            await state.clear()
         except Exception as e:
             logging.error(f"Error sending message: {e}")
             await message.answer("Xabar yetkazilishda muvofaqiyatsizlikka uchradi. Qabul qiluvchiga eltib bo'lmadi.")
     else:
-        await message.answer("Nomalum xato sodir bo'ldi. Qaytadan urinib ko'ring.")
+        await message.answer("Nimadir xato ketdi. Iltimos, qaytadan urinib ko'ring.")
 
 
 # Handle the Cancel button
 @dp.callback_query(lambda query: query.data == "cancel")
-async def cancel_callback(callback: CallbackQuery):
-    if callback.message.chat.id in pending_messages:
-        pending_messages.pop(callback.message.chat.id)
+async def cancel_callback(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     await callback.message.delete()
 
 
@@ -338,33 +243,33 @@ async def cancel_callback(callback: CallbackQuery):
 @dp.callback_query(lambda query: query.data.startswith("answer:"))
 async def answer_callback(callback: CallbackQuery, state: FSMContext):
     await state.update_data(reply_to=callback.message.message_id)
-    sender_id = int(callback.data.split(":")[1])
+    token = callback.data.split(":")[1]
+    sender_id = callback_map.get(token, None)
+    if sender_id is None:
+        return await callback.message.reply('Serverda uzilish sodir bolgan. endi bu xabarga javob berolmaysiz')
     if int(sender_id) in blocklist and callback.message.chat.id in blocklist[int(sender_id)]:
         await callback.answer("Siz bu foydalanuvchiga xabar yubora olmaysiz.\nU sizni bloklagan!", show_alert=True)
         return await callback.message.edit_reply_markup(reply_markup=None)
-    try:
-        prev_msg = await callback.message.reply(
-            "👆 Ushbu xabar yuboruvchiga javob yozing:",
-            reply_markup=InlineKeyboardBuilder().button(text="Cancel", callback_data="cancel").as_markup(),
-        )
-        await state.update_data(prev_msg=prev_msg.message_id)
-        pending_messages[callback.message.chat.id] = sender_id
-    except Exception as e:
-        logging.error(f"Error in answering: {e}")
+    prev_msg = await callback.message.reply(
+        "👆 Ushbu xabar yuboruvchiga javob yozing:",
+        reply_markup=InlineKeyboardBuilder().button(text="Cancel", callback_data="cancel").as_markup(),
+    )
+    await state.set_state(User.msg)
+    await state.update_data(prev_msg=prev_msg.message_id, recipient_id=sender_id)
 
 
-# Handle Block button
 @dp.callback_query(lambda query: query.data.startswith("block:"))
 async def block_callback(callback: CallbackQuery):
-    sender_id = int(callback.data.split(":")[1])
-    # recipient_id = callback.message.chat.id
+    token = callback.data.split(":")[1]
+    sender_id = callback_map.get(token, None)
+    if sender_id is None:
+        return await callback.answer("Serverda uzilish sodir bolgan. Endi bu xabar egasini bloklay olmaysiz")
     if int(sender_id) in blocklist and callback.message.chat.id in blocklist[int(sender_id)]:
         await callback.answer("Allaqachon bloklangan", show_alert=True)
         return
 
-    # Ask for confirmation
     markup = InlineKeyboardBuilder()
-    markup.button(text="Ha, Bloklansin", callback_data=f"confirm_block:{sender_id}")
+    markup.button(text="Ha, Bloklansin", callback_data=f"confirm_block:{token}")
     markup.button(text="Yo'q, fikrimdan qaytdim", callback_data="cancel")
     try:
         await callback.message.reply(
@@ -378,7 +283,10 @@ async def block_callback(callback: CallbackQuery):
 # Confirm blocking
 @dp.callback_query(lambda query: query.data.startswith("confirm_block:"))
 async def confirm_block_callback(callback: CallbackQuery):
-    sender_id = int(callback.data.split(":")[1])
+    token = callback.data.split(":")[1]
+    sender_id = callback_map.get(token, None)
+    if sender_id is None:
+        return await callback.answer("Serverda uzilish sodir bolgan. Endi bu xabar egasini bloklay olmaysiz")
     recipient_id = callback.message.chat.id
 
     if recipient_id not in blocklist:
@@ -391,50 +299,36 @@ async def confirm_block_callback(callback: CallbackQuery):
 # Handle /get_my_link command
 @dp.message(Command(commands=["get_my_link"]))
 async def get_my_link_handler(message: Message):
-    await message.reply('Kechirasiz, hozircha link olish imkoniyati mavjud emas.')
-    # user_id = str(message.chat.id)
-    # bot_username = (await bot.get_me()).username
+    user_id = str(message.chat.id)
+    bot_username = (await bot.get_me()).username
 
-    # # Retrieve or generate the user's unique link
-    # if user_id not in user_links:
-    #     unique_code = generate_unique_code()
-    #     user_links[user_id] = unique_code
-    #     link_to_user[unique_code] = user_id
-    # else:
-    #     unique_code = user_links[user_id]
+    token = get_or_create_token(user_id, user_map)
 
-    # start_link = f"https://t.me/{bot_username}?start={unique_code}"
-    # await message.answer(
-    #     f"Here is your anonymous message link:\n{start_link}"
-    # )
+    start_link = f"https://t.me/{bot_username}?start={token}"
+    await message.answer(
+        f"{start_link}"
+    )
 
 
-# Handle /renew_my_link command
 @dp.message(Command(commands=["renew_my_link"]))
 async def renew_my_link_handler(message: Message):
-    await message.reply('Kechirasiz, hozircha linkni yangilarsh imkoniyati mavjud emas')
-    # user_id = str(message.chat.id)
-    # bot_username = (await bot.get_me()).username
+    user_id = str(message.chat.id)
+    bot_username = (await bot.get_me()).username
 
-    # # Generate a new unique link
-    # if user_id in user_links:
-    #     # Remove the old link from the mapping
-    #     old_code = user_links[user_id]
-    #     if old_code in link_to_user:
-    #         del link_to_user[old_code]
+    need_del = None
+    for var, val in user_map.items():
+        if val == user_id:
+            need_del = var
+    if need_del: del user_map[need_del]
 
-    # # Generate a new link
-    # unique_code = generate_unique_code()
-    # user_links[user_id] = unique_code
-    # link_to_user[unique_code] = user_id
+    token = get_or_create_token(user_id, user_map)
 
-    # start_link = f"https://t.me/{bot_username}?start={unique_code}"
-    # await message.answer(
-    #     f"Your anonymous message link has been renewed:\n{start_link}"
-    # )
+    start_link = f"https://t.me/{bot_username}?start={token}"
+    await message.answer(
+        f"Mana sizning yangi linkingiz.\nEndi eski linkingiz orqali sizga bog'lanish ilojsiz.\n{start_link}"
+    )
 
 
-# Run the bot
 if __name__ == "__main__":
     import asyncio
     dp.message.middleware(ErrorLoggingMiddleware(bot, '-1002266947327'))
