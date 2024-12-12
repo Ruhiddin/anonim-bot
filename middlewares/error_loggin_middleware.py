@@ -2,7 +2,7 @@ from aiogram import BaseMiddleware, types
 from aiogram.types import Message
 from aiogram.exceptions import TelegramBadRequest
 import traceback
-from utils import noww
+from utils.misc import noww
 
 from aiogram import BaseMiddleware, types, Bot
 from aiogram.exceptions import TelegramBadRequest
