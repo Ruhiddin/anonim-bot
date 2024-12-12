@@ -17,6 +17,7 @@ from utils import user_token as u
 from utils import call_token as c
 from utils import token_generator as g
 from decorators import valid_link_name
+import os
 
 
 env_path = Path('.env')
@@ -525,10 +526,9 @@ Biz sizga xavfsiz va ishonchli anonim muloqot muhitini taqdim etamiz\\. Har qand
 
 
 
-
-
-
-
+@dp.message(Command('manufacturer'))
+async def manufacturer(msg: Message):
+    await msg.reply('https://t.me/tezbots')
 
 
 
