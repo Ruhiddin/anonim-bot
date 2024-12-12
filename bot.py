@@ -93,7 +93,7 @@ async def start_handler(message: Message, command: CommandStart, state: FSMConte
             "\n\n🔗 *Shaxsiy havolangizni oling va do'stlaringiz bilan ulashing\\!*"
             "\n *Linklarni Boshqarish: /my\\_links*"
             ),
-            parse_mode=ParseMode.MARKDOWN_V2
+            parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True
         )
 
 @dp.message(StateFilter(User.msg, User.answer))
@@ -225,7 +225,7 @@ async def handle_anonymous_message(message: Message, state: FSMContext):
                 bot_username = (await bot.get_me()).username
                 link = f"https://t.me/{bot_username}?start={recipient_token}"
                 text = f"Sizning bu xabaringiz ↗️\n{link} link egasiga yuborildi!"
-            await message.answer(text, reply_to_message_id=reply_to)
+            await message.answer(text, reply_to_message_id=reply_to, disable_web_page_preview=True)
             await state.clear()
         except Exception as e:
             logging.error(f"Error sending message: {e}")
@@ -354,7 +354,7 @@ async def my_links(c: CallbackQuery, state: FSMContext):
             markup.button(text=f"✏️ Nomini O'zgartirish", callback_data=f'my_links:UPDATE_{index}')
             markup.button(text='🔙 Orqaga', callback_data='my_links:BACK')
             markup.adjust(2, 1)
-            await c.message.edit_text(text, reply_markup=markup.as_markup())
+            await c.message.edit_text(text, reply_markup=markup.as_markup(), disable_web_page_preview=True)
         except IndexError:
             return await c.answer('Xatolik yuz berdi')
 
@@ -382,7 +382,7 @@ async def my_links(c: CallbackQuery, state: FSMContext):
                 bot_username = (await bot.get_me()).username
                 link = f"https://t.me/{bot_username}?start={token}"
                 text = f"O'chirilgan Link:\n\nNom: {name}\nLink: {link}"
-                await c.message.edit_text(text)
+                await c.message.edit_text(text, disable_web_page_preview=True)
                 await state.clear()
             except:
                 return await c.answer("O'chirishda xatolik yuz berdi!")
@@ -401,7 +401,7 @@ async def my_links(c: CallbackQuery, state: FSMContext):
             markup = InlineKeyboardBuilder()
             markup.button(text=f"Ha, O'chirib tashlansin!", callback_data=f'my_links:DELETE_CONFIRM_{index}')
             markup.button(text='🔙 Orqaga', callback_data=f'my_links:GET_{index}')
-            await c.message.edit_text(text, reply_markup=markup.as_markup())
+            await c.message.edit_text(text, reply_markup=markup.as_markup(), disable_web_page_preview=True)
         except IndexError:
             return await c.answer('Xatolik yuz berdi')
     elif act.startswith('UPDATE_'):
@@ -415,7 +415,7 @@ async def my_links(c: CallbackQuery, state: FSMContext):
             text = f"Yangi nomni kiriting:\n\nEski Nom: {name}\nLink: {link}"
             markup = InlineKeyboardBuilder()
             markup.button(text='🔙 Orqaga', callback_data=f'my_links:GET_{index}')
-            await c.message.edit_text(text, reply_markup=markup.as_markup())
+            await c.message.edit_text(text, reply_markup=markup.as_markup(), disable_web_page_preview=True)
             await state.set_state(User.edit_link_name)
             await state.update_data(link=link_data)
         except IndexError:
@@ -432,7 +432,7 @@ async def link_name(msg: Message, state: FSMContext):
     await u.create_my_new_token(msg.from_user.id, token, msg.text)
     bot_username = (await bot.get_me()).username
     link = f"https://t.me/{bot_username}?start={token}"
-    await msg.reply(f'Yangi link!\n{link}\nNom: {msg.text}')
+    await msg.reply(f'Yangi link!\n{link}\nNom: {msg.text}', disable_web_page_preview=True)
     await state.clear()
 
 
@@ -446,7 +446,7 @@ async def edit_link_name(msg: Message, state: FSMContext):
     await u.update_my_token(msg.from_user.id, link_data.get('token'), msg.text)
     bot_username = (await bot.get_me()).username
     link = f"https://t.me/{bot_username}?start={link_data.get('token')}"
-    await msg.reply(f"Link Nomi O'zgardi!\n\nEski Nom: {link_data.get('name')}\nYangi Nom: {msg.text}\nLink: {link}")
+    await msg.reply(f"Link Nomi O'zgardi!\n\nEski Nom: {link_data.get('name')}\nYangi Nom: {msg.text}\nLink: {link}", disable_web_page_preview=True)
     await state.clear()
 
 
@@ -516,7 +516,7 @@ Biz sizga xavfsiz va ishonchli anonim muloqot muhitini taqdim etamiz\\. Har qand
 
 ⁉️ *Savol va Takliflar uchun:* [Muhokama guruhi](https://t.me/pure_ideas/66/68)
     """
-    await msg.reply(text, parse_mode=ParseMode.MARKDOWN_V2)
+    await msg.reply(text, parse_mode=ParseMode.MARKDOWN_V2, disable_web_page_preview=True)  # type: ignore
 
 
 
